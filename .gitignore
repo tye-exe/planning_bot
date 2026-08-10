@@ -1,0 +1,7 @@
+/target
+
+# Runtime database.
+db.*
+
+# Contains development discord token.
+.env
