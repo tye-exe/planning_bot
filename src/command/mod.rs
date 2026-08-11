@@ -1,5 +1,5 @@
 use crate::{
-    CommandContext, CommandError,
+    AppSate, CommandContext, CommandError,
     database::{
         get_channel_max, get_interested, remove_hangout, remove_interested, set_channel_max,
         set_interested,
@@ -12,25 +12,64 @@ use serenity::all::MessageBuilder;
 
 pub mod error_response;
 
+/// A [`CreateReply`] that is set to be ephemeral and a reply.
+fn ephemeral_reply(content: impl Into<String>) -> CreateReply {
+    CreateReply::default()
+        .ephemeral(true)
+        .reply(true)
+        .content(content)
+}
+
+/// Register bot commands in the current guild.
+///
+/// This will take effect instantly, but will lead to duplicate commands in the long run due to
+/// global command registration.
 #[poise::command(slash_command, prefix_command)]
 pub async fn guild_register(ctx: CommandContext<'_>) -> Result<(), CommandError> {
     let Some(guild_id) = ctx.guild_id() else {
-        ctx.say(format!("Not in guild"))
+        ctx.send(ephemeral_reply("Not in a guild"))
             .await
-            .context("Cannot register commands.")?;
+            .context("Cannot send reply")?;
 
         return Ok(());
     };
 
     poise::builtins::register_in_guild(ctx, &ctx.framework().options().commands, guild_id).await?;
 
-    ctx.say(format!("Registered commands in guild"))
+    ctx.send(ephemeral_reply("Registered commands in guild"))
         .await
-        .context("Cannot register commands.")?;
+        .context("Cannot send reply")?;
 
     Ok(())
 }
 
+/// Unregister bot commands in the current guild.
+#[poise::command(slash_command, prefix_command)]
+pub async fn guild_unregister(ctx: CommandContext<'_>) -> Result<(), CommandError> {
+    let Some(guild_id) = ctx.guild_id() else {
+        ctx.send(ephemeral_reply("Not in a guild"))
+            .await
+            .context("Cannot send reply")?;
+
+        return Ok(());
+    };
+
+    // Register an empty array of commands.
+    poise::builtins::register_in_guild(
+        ctx,
+        &Vec::<poise::Command<AppSate, CommandError>>::new(),
+        guild_id,
+    )
+    .await?;
+
+    ctx.send(ephemeral_reply("Unregistered commands in guild"))
+        .await
+        .context("Cannot send reply")?;
+
+    Ok(())
+}
+
+/// Set a hangout in the current channel.
 #[poise::command(slash_command, prefix_command)]
 pub async fn hangout(
     ctx: CommandContext<'_>,
@@ -49,12 +88,20 @@ pub async fn hangout(
     Ok(())
 }
 
+/// Remove the hangout in the current channel the and all interested users.
+#[poise::command(slash_command, prefix_command)]
 pub async fn event_over(ctx: CommandContext<'_>) -> Result<(), CommandError> {
     Ok(remove_hangout(&ctx.data().db, ctx.channel_id())
         .await
         .context("Cannot remove hangout and attendees.")?)
 }
 
+/// Register your interest for the current hangout.
+///
+/// If there is an open space you will be marked as attending the hangout.
+///
+/// If the hangout is already full you will be put in a queue in case anyone drops out and you will
+/// take there space (first come first serve).
 #[poise::command(slash_command, prefix_command)]
 pub async fn interested(ctx: CommandContext<'_>) -> Result<(), CommandError> {
     set_interested(
@@ -103,6 +150,10 @@ pub async fn interested(ctx: CommandContext<'_>) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// Remove interest the current hangout (whether before or during if others want to attend).
+///
+/// If there are people who want to join but cannot due to an attendee limit, one of them will
+/// take your space.
 #[poise::command(slash_command, prefix_command)]
 pub async fn leave(ctx: CommandContext<'_>) -> Result<(), CommandError> {
     let new_space = remove_interested(&ctx.data().db, ctx.channel_id(), ctx.author().id).await?;

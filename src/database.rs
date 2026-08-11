@@ -6,12 +6,16 @@ use jiff::Timestamp;
 use rootcause::prelude::*;
 use serenity::all::{ChannelId, GuildId, UserId};
 
+/// Whether a user is attending a hangout.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Attending {
+    /// The user is registered for this hangout.
     Already,
+    /// The user is newly interested in this hangout.
     New,
 }
 
+/// Creates the tables in the database if it does not exist.
 pub async fn setup_db(db: &Client) -> Result<(), Report> {
     db.conn(|con| {
         con.execute_batch(
@@ -37,7 +41,7 @@ CREATE TABLE IF NOT EXISTS attendee (
     Ok(())
 }
 
-/// Removes a hangout and all interested from the database.
+/// Removes a hangout and all interested users from the database.
 pub async fn remove_hangout(db: &Client, channel: ChannelId) -> Result<(), Report> {
     db.conn(move |con| {
         con.execute(
@@ -50,6 +54,7 @@ pub async fn remove_hangout(db: &Client, channel: ChannelId) -> Result<(), Repor
     Ok(())
 }
 
+/// Creates or replaces a hangout with the maximum attendees for a hangout.
 pub async fn set_channel_max(db: &Client, channel: ChannelId, max: u8) -> Result<usize, Report> {
     Ok(db
         .conn(move |con| {
