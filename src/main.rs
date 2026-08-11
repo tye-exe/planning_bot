@@ -1,13 +1,11 @@
-use crate::{
-    command::{guild_register, hangout, interested, leave},
-    database::setup_db,
-};
+use crate::{command::bot_command::*, database::setup_db};
 use async_sqlite::rusqlite::OpenFlags;
 use async_sqlite::{ClientBuilder, JournalMode};
 use poise::Framework;
 use poise::FrameworkOptions;
 use rootcause::Report;
 use rootcause::prelude::*;
+use serenity::all::UserId;
 use serenity::prelude::*;
 
 mod command;
@@ -43,22 +41,15 @@ async fn setup() -> Result<(), Report> {
 
     let framework = Framework::builder()
         .options(FrameworkOptions {
-            commands: vec![guild_register(), hangout(), interested(), leave()],
+            commands: vec![command_registration(), hangout(), interested(), leave()],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("£".into()),
                 ..Default::default()
             },
+            owners: [1192519637448011827].map(UserId::new).into_iter().collect(),
             ..Default::default()
         })
-        .setup(|ctx, ready, framework| {
-            Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands)
-                    .await
-                    .context("Unable to register global commands")?;
-
-                Ok(AppSate { db })
-            })
-        })
+        .setup(|_ctx, _ready, _framework| Box::pin(async move { Ok(AppSate { db }) }))
         .build();
 
     // Create a new instance of the Client, logging in as a bot. This will automatically prepend
