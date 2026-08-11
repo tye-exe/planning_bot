@@ -1,6 +1,5 @@
 use crate::{
-    AppSate, CommandContext, CommandError,
-    command::ephemeral_reply,
+    CommandContext, CommandError,
     database::{
         get_channel_max, get_interested, remove_hangout, remove_interested, set_channel_max,
         set_interested,
@@ -19,6 +18,27 @@ pub async fn command_registration(ctx: CommandContext<'_>) -> Result<(), Command
     poise::builtins::register_application_commands_buttons(ctx)
         .await
         .context("Unable to register application commands.")?;
+
+    Ok(())
+}
+
+/// Shows help for commands.
+#[poise::command(slash_command, prefix_command)]
+pub async fn help(
+    ctx: CommandContext<'_>,
+    #[description = "Optionally, a specific command to view help of."] specific_command: Option<
+        String,
+    >,
+) -> Result<(), CommandError> {
+    poise::builtins::pretty_help(
+        ctx,
+        specific_command.as_deref(),
+        poise::builtins::PrettyHelpConfiguration {
+            ..Default::default()
+        },
+    )
+    .await
+    .context("Unable to send help command.")?;
 
     Ok(())
 }

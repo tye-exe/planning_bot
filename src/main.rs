@@ -41,7 +41,13 @@ async fn setup() -> Result<(), Report> {
 
     let framework = Framework::builder()
         .options(FrameworkOptions {
-            commands: vec![command_registration(), hangout(), interested(), leave()],
+            commands: vec![
+                command_registration(),
+                help(),
+                hangout(),
+                interested(),
+                leave(),
+            ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("£".into()),
                 ..Default::default()
