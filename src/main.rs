@@ -44,6 +44,7 @@ async fn setup() -> Result<(), Report> {
             commands: vec![
                 command_registration(),
                 help(),
+                guide(),
                 hangout(),
                 interested(),
                 leave(),

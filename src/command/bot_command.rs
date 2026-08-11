@@ -1,5 +1,6 @@
 use crate::{
     CommandContext, CommandError,
+    command::ephemeral_reply,
     database::{
         get_channel_max, get_interested, remove_hangout, remove_interested, set_channel_max,
         set_interested,
@@ -39,6 +40,39 @@ pub async fn help(
     )
     .await
     .context("Unable to send help command.")?;
+
+    Ok(())
+}
+
+/// Explains how to use the bot.
+#[poise::command(slash_command, prefix_command)]
+pub async fn guide(ctx: CommandContext<'_>) -> Result<(), CommandError> {
+    let guide_text = "\
+This discord bot helps manage who is attending hangouts in a first come first serve basis, \
+including when users drop-out of a hangout.
+
+- A hangout is in a specific channel, with a maximum number of attendees (use 255 if there is no \
+maximum).
+- People can register to attend the hangout via the discord bot.
+- If more people are interested than available slots a first come first serve queue is created \
+based on the time interest was expressed.
+- If someone leaves (either during or before the event) a message will be sent to the first person \
+waiting in the queue (if there are any).
+
+See the **help** command for information on how to use commands or a specific command.
+
+If you have any further questions, ask them in the server."
+        .as_bytes()
+        .chunks(1998)
+        .map(str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .expect("Unable to split up guide message");
+
+    for text in guide_text {
+        ctx.send(ephemeral_reply(text))
+            .await
+            .context("Unable to send message.")?;
+    }
 
     Ok(())
 }
