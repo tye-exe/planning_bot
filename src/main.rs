@@ -25,7 +25,7 @@ type CommandContext<'a> = poise::Context<'a, AppSate, CommandError>;
 
 async fn setup() -> Result<(), Report> {
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let token = std::fs::read_to_string(".key").context("Expected discord token in '.key' file")?;
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES

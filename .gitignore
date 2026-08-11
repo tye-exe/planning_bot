@@ -3,5 +3,5 @@
 # Runtime database.
 db.*
 
-# Contains development discord token.
-.env
+# Contains discord token.
+.key
