@@ -3,6 +3,7 @@ use async_sqlite::rusqlite::OpenFlags;
 use async_sqlite::{ClientBuilder, JournalMode};
 use poise::Framework;
 use poise::FrameworkOptions;
+use poise::samples::on_error;
 use rootcause::Report;
 use rootcause::prelude::*;
 use serenity::all::UserId;
@@ -56,6 +57,13 @@ async fn setup() -> Result<(), Report> {
                 ..Default::default()
             },
             owners: [1192519637448011827].map(UserId::new).into_iter().collect(),
+            on_error: |error| {
+                Box::pin(async move {
+                    if let Err(e) = on_error(error).await {
+                        log::error!("Error while handling error: {}", e);
+                    }
+                })
+            },
             ..Default::default()
         })
         .setup(|_ctx, _ready, _framework| Box::pin(async move { Ok(AppSate { db }) }))
@@ -77,6 +85,8 @@ async fn setup() -> Result<(), Report> {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     if let Err(err) = setup().await {
         eprintln!("{err}\n");
         eprintln!("• Lines with ● are contexts (.context()) - what operation failed");

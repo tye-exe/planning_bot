@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 async-sqlite = { version = "0.6.0", features = ["jiff"] }
+env_logger = "0.11.11"
 jiff = "0.2.35"
+log = "0.4.33"
 poise = "0.6.2"
 rootcause = "0.13.0"
 serenity = "0.12.5"
