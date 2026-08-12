@@ -15,6 +15,27 @@ pub enum Attending {
     New,
 }
 
+/// Checks if [`Connection`] is a hangout_channel.
+fn is_hangout_channel(con: &Connection, channel: ChannelId) -> Result<bool, SqliteError> {
+    Ok(con
+        .query_one(
+            "SELECT 1 FROM hangout_channel WHERE channel_id = ?1",
+            [channel.get().cast_signed()],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some())
+}
+
+/// Gets the maximum attendees for a hangout.
+fn get_maximum(con: &Connection, channel: ChannelId) -> Result<u8, SqliteError> {
+    Ok(con.query_one(
+        "SELECT max_attendees FROM hangout_channel WHERE channel_id = ?1",
+        [channel.get().cast_signed()],
+        |row| row.get::<usize, u8>(0),
+    )?)
+}
+
 /// Creates the tables in the database if it does not exist.
 pub async fn setup_db(db: &Client) -> Result<(), Report> {
     db.conn(|con| {
@@ -80,18 +101,6 @@ pub async fn get_channel_max(db: &Client, channel: ChannelId) -> Result<Option<u
         })
         .await
         .context("Cannot get maximum attendees")?)
-}
-
-/// Checks if [`Connection`] is a hangout_channel.
-fn is_hangout_channel(con: &Connection, channel: ChannelId) -> Result<bool, SqliteError> {
-    Ok(con
-        .query_one(
-            "SELECT 1 FROM hangout_channel WHERE channel_id = ?1",
-            [channel.get().cast_signed()],
-            |_| Ok(()),
-        )
-        .optional()?
-        .is_some())
 }
 
 /// Returns [`None`] if this channel is not a hangout channel.
@@ -179,6 +188,44 @@ pub async fn remove_interested(
         })
         .await
         .context("Cannot remove attendee")?)
+}
+
+/// The users attending a hangout, or [`None`] if the channel is not a hangout.
+///
+/// Element 1 of the tuple is the attending users.
+/// Element 2 is the interested users.
+pub async fn hangout_status(
+    db: &Client,
+    channel: ChannelId,
+) -> Result<Option<(Vec<UserId>, Vec<UserId>)>, Report> {
+    Ok(db
+        .conn_mut(move |con| {
+            let trans = con.transaction()?;
+
+            if !is_hangout_channel(&trans, channel)? {
+                return Ok(None);
+            }
+
+            let maximum = get_maximum(&trans, channel)?;
+
+            let mut users = trans
+                .prepare(
+                    "SELECT user_id FROM attendee WHERE hangout_id = ?1 ORDER BY interest_time ASC",
+                )?
+                .query_map([channel.get().cast_signed()], |row| {
+                    row.get::<usize, i64>(0)
+                })?
+                .map(|user| user.map(|user| UserId::new(user.cast_unsigned())))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter();
+
+            Ok(Some((
+                users.by_ref().take(maximum.into()).collect::<Vec<_>>(),
+                users.collect::<Vec<_>>(),
+            )))
+        })
+        .await
+        .context("Unable to get attending users.")?)
 }
 
 // pub async fn setup_guild(
@@ -540,5 +587,47 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn status() {
+        let channel_id = ChannelId::new(1);
+
+        let db = setup().await;
+
+        set_channel_max(&db, channel_id, 10)
+            .await
+            .expect("Able to set channel max");
+
+        for id in 1..4 {
+            set_interested(&db, channel_id, id.into(), Timestamp::default())
+                .await
+                .unwrap();
+        }
+
+        let (attending, interested) = hangout_status(&db, channel_id).await.unwrap().unwrap();
+        assert_eq!(attending, vec![1, 2, 3]);
+        assert!(interested.is_empty())
+    }
+
+    #[tokio::test]
+    async fn status_with_interested() {
+        let channel_id = ChannelId::new(1);
+
+        let db = setup().await;
+
+        set_channel_max(&db, channel_id, 2)
+            .await
+            .expect("Able to set channel max");
+
+        for id in 1..4 {
+            set_interested(&db, channel_id, id.into(), Timestamp::default())
+                .await
+                .unwrap();
+        }
+
+        let (attending, interested) = hangout_status(&db, channel_id).await.unwrap().unwrap();
+        assert_eq!(attending, vec![1, 2]);
+        assert_eq!(interested, vec![3]);
     }
 }

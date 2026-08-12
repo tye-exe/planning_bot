@@ -2,14 +2,14 @@ use crate::{
     CommandContext, CommandError,
     command::ephemeral_reply,
     database::{
-        get_channel_max, get_interested, remove_hangout, remove_interested, set_channel_max,
-        set_interested,
+        get_channel_max, get_interested, hangout_status, remove_hangout, remove_interested,
+        set_channel_max, set_interested,
     },
 };
 use jiff::Timestamp;
 use poise::CreateReply;
 use rootcause::prelude::*;
-use serenity::all::MessageBuilder;
+use serenity::all::{CreateAllowedMentions, CreateEmbed, MessageBuilder};
 
 /// Menu for registering commands in the guild or globally.
 ///
@@ -184,6 +184,58 @@ pub async fn leave(ctx: CommandContext<'_>) -> Result<(), CommandError> {
     ctx.say(content)
         .await
         .context("Cannot state attendance changes.")?;
+
+    Ok(())
+}
+
+/// Displays the current attending and interested users along with the maximum spaces.
+#[poise::command(slash_command, prefix_command)]
+pub async fn status(ctx: CommandContext<'_>) -> Result<(), CommandError> {
+    let maximum = get_channel_max(&ctx.data().db, ctx.channel_id())
+        .await
+        .context("Cannot get hangout channel maximum")?;
+
+    let (Some((attending, interested)), Some(max)) = (
+        hangout_status(&ctx.data().db, ctx.channel_id()).await?,
+        maximum,
+    ) else {
+        ctx.send(ephemeral_reply("This channel is not a hangout."))
+            .await
+            .context("Unable to send reply")?;
+        return Ok(());
+    };
+
+    let amount_attending = attending.len();
+
+    let list_user = |mut message: MessageBuilder, user| {
+        message.push("- ").user(user).push("\n");
+        message
+    };
+
+    let attending_message = attending
+        .into_iter()
+        .fold(MessageBuilder::new(), list_user)
+        .build();
+    let interested_message = interested
+        .into_iter()
+        .fold(MessageBuilder::new(), list_user)
+        .build();
+
+    ctx.send(
+        CreateReply::default()
+            .allowed_mentions(CreateAllowedMentions::new().empty_users())
+            .embed(
+                CreateEmbed::new()
+                    .title("Status")
+                    .field("Attending", attending_message, false)
+                    .field("Interested", interested_message, false)
+                    .field("Spaces", format!("{amount_attending}/{max}",), false),
+            )
+            .reply(true)
+            .ephemeral(true),
+    )
+    .await
+    .context("Unable to send hangout status to user")?;
 
     Ok(())
 }

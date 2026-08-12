@@ -49,6 +49,7 @@ async fn setup() -> Result<(), Report> {
                 event_over(),
                 interested(),
                 leave(),
+                status(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("£".into()),
