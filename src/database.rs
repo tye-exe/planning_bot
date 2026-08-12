@@ -4,7 +4,7 @@ use async_sqlite::{
 };
 use jiff::Timestamp;
 use rootcause::prelude::*;
-use serenity::all::{ChannelId, GuildId, UserId};
+use serenity::all::{ChannelId, UserId};
 
 /// Whether a user is attending a hangout.
 #[derive(Clone, Copy, PartialEq, Debug)]

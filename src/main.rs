@@ -46,6 +46,7 @@ async fn setup() -> Result<(), Report> {
                 help(),
                 guide(),
                 hangout(),
+                event_over(),
                 interested(),
                 leave(),
             ],
