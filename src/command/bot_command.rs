@@ -101,9 +101,15 @@ pub async fn hangout(
 /// Only relivant for channels that will house multiple hangouts sequentially.
 #[poise::command(slash_command, prefix_command)]
 pub async fn event_over(ctx: CommandContext<'_>) -> Result<(), CommandError> {
-    Ok(remove_hangout(&ctx.data().db, ctx.channel_id())
+    remove_hangout(&ctx.data().db, ctx.channel_id())
         .await
-        .context("Cannot remove hangout and attendees.")?)
+        .context("Cannot remove hangout and attendees.")?;
+
+    ctx.say("This channel is no longer a hangout.")
+        .await
+        .context("Cannot send hangout remove message")?;
+
+    Ok(())
 }
 
 /// Register your interest for the current hangout.
