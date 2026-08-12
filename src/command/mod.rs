@@ -2,7 +2,6 @@ use poise::CreateReply;
 
 /// Discord bot commands.
 pub mod bot_command;
-pub mod error_response;
 
 /// A [`CreateReply`] that is set to be ephemeral and a reply.
 fn ephemeral_reply(content: impl Into<String>) -> CreateReply {
