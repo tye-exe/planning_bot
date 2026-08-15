@@ -75,17 +75,39 @@ pub async fn remove_hangout(db: &Client, channel: ChannelId) -> Result<(), Repor
     Ok(())
 }
 
-/// Creates or replaces a hangout with the maximum attendees for a hangout.
-pub async fn set_channel_max(db: &Client, channel: ChannelId, max: u8) -> Result<usize, Report> {
-    Ok(db
-        .conn(move |con| {
-            con.execute(
-                "INSERT OR REPLACE INTO hangout_channel VALUES (?1, ?2)",
-                (channel.get().cast_signed(), max),
+/// Creates or updates a hangout with the maximum attendees for a hangout.
+pub async fn set_channel_max(db: &Client, channel: ChannelId, max: u8) -> Result<(), Report> {
+    db.conn_mut(move |con| {
+        let trans = con.transaction()?;
+
+        let exists = trans
+            .query_one(
+                "SELECT 1 FROM hangout_channel WHERE channel_id = ?1",
+                [channel.get().cast_signed()],
+                |row| row.get::<usize, bool>(0),
             )
-        })
-        .await
-        .context("Cannot set maximum attendees")?)
+            .optional()?
+            .is_some();
+
+        if exists {
+            trans.execute(
+                "UPDATE hangout_channel SET max_attendees = ?2 WHERE channel_id = ?1",
+                (channel.get().cast_signed(), max),
+            )?;
+        } else {
+            trans.execute(
+                "INSERT INTO hangout_channel VALUES (?1, ?2)",
+                (channel.get().cast_signed(), max),
+            )?;
+        }
+
+        trans.commit()?;
+        Ok(())
+    })
+    .await
+    .context("Cannot set maximum attendees")?;
+
+    Ok(())
 }
 
 /// The maximum channel attendees, or [`None`] if this channel is not a hangout channel.
@@ -629,5 +651,29 @@ mod tests {
         let (attending, interested) = hangout_status(&db, channel_id).await.unwrap().unwrap();
         assert_eq!(attending, vec![1, 2]);
         assert_eq!(interested, vec![3]);
+    }
+
+    #[tokio::test]
+    async fn max_update_users_retained() {
+        let channel_id = ChannelId::new(1);
+
+        let db = setup().await;
+
+        set_channel_max(&db, channel_id, 2)
+            .await
+            .expect("Able to set channel max");
+
+        for id in 1..4 {
+            set_interested(&db, channel_id, id.into(), Timestamp::default())
+                .await
+                .unwrap();
+        }
+
+        set_channel_max(&db, channel_id, 7)
+            .await
+            .expect("Able to set channel max");
+
+        let (attending, _) = hangout_status(&db, channel_id).await.unwrap().unwrap();
+        assert_eq!(attending, vec![1, 2, 3]);
     }
 }
